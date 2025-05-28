@@ -46,6 +46,16 @@ func main() {
 			description: "Attempt to catch a pokemon",
 			callback:    commandCatch,
 		},
+		"inspect": {
+			name:        "inspect",
+			description: "Displays information about a pokemon",
+			callback:    commandInspect,
+		},
+		"pokedex": {
+			name:        "pokedex",
+			description: "Lists all the names of Pokemon you have caught",
+			callback:    commandPokedex,
+		},
     }
 	config := &config{
 		cache: pokecache.NewCache(5 * time.Minute),
@@ -163,6 +173,13 @@ type encounterResults struct {
 }
 
 type Pokemon struct {
+	ID             int    `json:"id"`
+    Name           string `json:"name"`
+    BaseExperience int    `json:"base_experience"`
+    Height         int    `json:"height"`
+    IsDefault      bool   `json:"is_default"`
+    Order          int    `json:"order"`
+    Weight         int    `json:"weight"`
     Abilities []struct {
         Ability struct {
             Name string `json:"name"`
@@ -171,7 +188,6 @@ type Pokemon struct {
         IsHidden bool `json:"is_hidden"`
         Slot     int  `json:"slot"`
     } `json:"abilities"`
-    BaseExperience int `json:"base_experience"`
     Cries          struct {
         Latest string `json:"latest"`
         Legacy string `json:"legacy"`
@@ -187,7 +203,6 @@ type Pokemon struct {
             URL  string `json:"url"`
         } `json:"version"`
     } `json:"game_indices"`
-    Height    int `json:"height"`
     HeldItems []struct {
         Item struct {
             Name string `json:"name"`
@@ -201,8 +216,6 @@ type Pokemon struct {
             } `json:"version"`
         } `json:"version_details"`
     } `json:"held_items"`
-    ID                     int    `json:"id"`
-    IsDefault             bool   `json:"is_default"`
     LocationAreaEncounters string `json:"location_area_encounters"`
     Moves                 []struct {
         Move struct {
@@ -221,6 +234,21 @@ type Pokemon struct {
             } `json:"version_group"`
         } `json:"version_group_details"`
     } `json:"moves"`
+	Stats []struct {
+        BaseStat int `json:"base_stat"`
+        Effort   int `json:"effort"`
+        Stat     struct {
+            Name string `json:"name"`
+            URL  string `json:"url"`
+        } `json:"stat"`
+    } `json:"stats"`
+	Types []struct {
+        Slot int `json:"slot"`
+        Type struct {
+            Name string `json:"name"`
+            URL  string `json:"url"`
+        } `json:"type"`
+    } `json:"types"`
 }
 
 func commandHelp(config *config) error {
@@ -232,6 +260,9 @@ func commandHelp(config *config) error {
 	fmt.Println("map: Display the next 20 locations")
 	fmt.Println("mapb: Display the previous 20 locations")
 	fmt.Println("explore <location>: Display pokemon at explored location")
+	fmt.Println("catch <name>: Attempt to catch the named pokemon")
+	fmt.Println("inspect <name>: Display information about a captured pokemon")
+	fmt.Println("pokedex: Display the names of all captured pokemon")
     return nil
 }
 
@@ -297,6 +328,9 @@ func commandExplore(config *config) error {
 }
 
 func commandCatch(config *config) error {
+	if len(config.input) < 2 {
+        return fmt.Errorf("no pokemon name provided")
+    }
 	target := config.input[1]
 	url := "https://pokeapi.co/api/v2/pokemon/" + target
 	var pokemon Pokemon
@@ -328,17 +362,50 @@ func commandCatch(config *config) error {
 			return err
 		}
 	}
-	fmt.Println()
 	fmt.Println("Throwing a Pokeball at " + target + "...")
 
 	catchRate := rand.Intn(201)
 	if pokemon.BaseExperience > catchRate {
 		fmt.Printf("%s escaped!\n", target)
 	} else {
-		fmt.Printf("%s was caught!\n", target)
+		fmt.Printf("%s was caught!\nYou may now inspect it with the inspect command.\n", target)
 		config.pokedex[target] = pokemon
 	}
 
+	return nil
+}
+
+func commandInspect(config *config) error {
+	if len(config.input) < 2 {
+        return fmt.Errorf("no pokemon name provided")
+    }
+	target := config.input[1]
+    pokemon, ok := config.pokedex[target]
+    if !ok {
+        return fmt.Errorf("you have not caught that pokemon yet")
+    }
+
+    fmt.Printf("Name: %s\n", pokemon.Name)
+    fmt.Printf("Height: %d\n", pokemon.Height)
+	fmt.Printf("Weight: %d\n", pokemon.Weight)
+	fmt.Println("Stats:")
+	for i := range 6 {
+    	fmt.Printf("  -%s: %d\n", pokemon.Stats[i].Stat.Name, pokemon.Stats[i].BaseStat)
+	}
+    
+    fmt.Println("Types:")
+    for _, t := range pokemon.Types {
+        fmt.Printf("  - %s\n", t.Type.Name)
+    }
+
+    return nil
+}
+
+func commandPokedex(config *config) error {
+	fmt.Println("Your Pokedex:")
+	for _, value := range config.pokedex {
+		fmt.Printf(" - %s\n", value.Name)
+	}
 	return nil
 }
 
